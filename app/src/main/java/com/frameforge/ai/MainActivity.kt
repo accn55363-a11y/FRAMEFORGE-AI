@@ -235,10 +235,13 @@ private class BenchmarkRenderer(
         } else if (benchmarkEnd > 0L) {
             val elapsed = (now - totalStart) / 1_000_000_000.0
             val fps = totalFrames / max(0.1, elapsed)
-            val sorted = frameTimesNs.sorted()
-            val p99Index = if (sorted.isNotEmpty()) (ceil(sorted.size * 0.99).toInt() - 1).coerceIn(0, sorted.lastIndex) else 0
-            val p99Ms = if (sorted.isNotEmpty()) sorted[p99Index] / 1_000_000.0 else 1000.0 / max(0.1, fps)
-            val onePercentLow = if (p99Ms > 0.0) 1000.0 / p99Ms else 0.0
+            // 1% low: average FPS represented by the slowest 1% of measured frame intervals.
+            val sortedSlowestFirst = frameTimesNs.sortedDescending()
+            val slowCount = if (sortedSlowestFirst.isEmpty()) 0 else max(1, ceil(sortedSlowestFirst.size * 0.01).toInt())
+            val slowAverageMs = if (slowCount > 0) {
+                sortedSlowestFirst.take(slowCount).average() / 1_000_000.0
+            } else 1000.0 / max(0.1, fps)
+            val onePercentLow = if (slowAverageMs > 0.0) 1000.0 / slowAverageMs else 0.0
             report(lastVendor, lastRenderer, "$lastVersion | Avg ${String.format(Locale.US, "%.1f", fps)} FPS | 1% low ~${String.format(Locale.US, "%.1f", onePercentLow)}", fps, 1000.0 / max(0.1, fps), true)
             benchmarkEnd = 0L
         }
@@ -267,17 +270,19 @@ fun FrameForgeApp(context: Context) {
     var lastTap by remember { mutableLongStateOf(0L) }
     var tapInterval by remember { mutableStateOf("--") }
     var gpuView by remember { mutableStateOf<GpuBenchmarkView?>(null) }
+    var interpolationView by remember { mutableStateOf<FrameInterpolationView?>(null) }
+    var interpolationPhase by remember { mutableFloatStateOf(0.5f) }
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, gpuView) {
+    DisposableEffect(lifecycleOwner, gpuView, interpolationView) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> gpuView?.onResume()
-                Lifecycle.Event.ON_PAUSE -> gpuView?.onPause()
+                Lifecycle.Event.ON_RESUME -> { gpuView?.onResume(); interpolationView?.onResume() }
+                Lifecycle.Event.ON_PAUSE -> { gpuView?.onPause(); interpolationView?.onPause() }
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer); gpuView?.onPause() }
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer); gpuView?.onPause(); interpolationView?.onPause() }
     }
     val ar = !english
     fun saveProfile() {
@@ -332,7 +337,7 @@ fun FrameForgeApp(context: Context) {
                             Column(Modifier.fillMaxWidth().background(
                                 androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF173B58), Color(0xFF172238), Panel)),
                                 RoundedCornerShape(22.dp)).padding(18.dp)) {
-                                Text(if (ar) "إصدار التطوير 0.3.0" else "DEVELOPER BUILD 0.3.0", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(if (ar) "إصدار التطوير 0.5.0" else "DEVELOPER BUILD 0.5.0", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(8.dp))
                                 Text(if (ar) "أدوات أداء حقيقية وقياسات شفافة" else "Real diagnostics. Transparent measurements.", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(8.dp))
@@ -462,10 +467,32 @@ fun FrameForgeApp(context: Context) {
                             InfoRow(if (ar) "الفاصل بين آخر لمستين" else "Last tap interval", tapInterval)
                             OutlinedButton(onClick = { taps = 0; lastTap = 0L; tapInterval = "--" }, Modifier.fillMaxWidth()) { Text(if (ar) "إعادة الاختبار" else "Reset test") }
                         }
-                        item { FeatureCard(Icons.Default.AutoAwesome, if (ar) "مختبر توليد الإطارات" else "Frame Generation Lab", if (ar) "هذه النسخة لا تنشئ بعد إطارات وسيطة. المرحلة التالية تتطلب بناء خوارزمية استيفاء داخل سطح عرض يملكه التطبيق واختبار كلفتها على GPU." else "This build does not yet synthesize intermediate frames. Next step is an app-owned frame interpolation pipeline and GPU cost testing.", "RESEARCH STAGE") }
+                        item { SectionTitle(if (ar) "مختبر استيفاء الإطارات" else "FRAME INTERPOLATION LAB") }
+                        item {
+                            Text(
+                                if (ar) "يعرض هذا المختبر إطاراً وسيطاً على GPU بين صورتين اصطناعيتين. في هذا المشهد التجريبي نستخدم متجه حركة معروفاً لإزاحة عينتي الصورتين قبل المزج، ما يقلل ازدواجية الجسم المتحرك. هذه معاوضة حركة لمشهد مضبوط وليست Optical Flow عاماً أو AI، ولا تعالج إطارات الألعاب الخارجية." else "This lab renders an in-between GPU frame from two synthetic images. The controlled demo uses a known motion vector to warp both samples before blending, reducing object ghosting. This is not general optical flow or AI and does not process third-party game frames.",
+                                color = Muted, fontSize = 11.sp, lineHeight = 16.sp
+                            )
+                            AndroidView(
+                                factory = { ctx -> FrameInterpolationView(ctx).also { view -> interpolationView = view; view.onResume(); view.setInterpolationPhase(interpolationPhase) } },
+                                modifier = Modifier.fillMaxWidth().height(190.dp).background(Color.Black, RoundedCornerShape(16.dp))
+                            )
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(if (ar) "موضع الإطار الوسيط" else "Interpolation phase", color = Muted, fontSize = 12.sp)
+                                Text("${(interpolationPhase * 100).toInt()}%", color = Accent, fontWeight = FontWeight.Bold)
+                            }
+                            Slider(
+                                value = interpolationPhase,
+                                onValueChange = { value -> interpolationPhase = value; interpolationView?.setInterpolationPhase(value) },
+                                valueRange = 0f..1f
+                            )
+                            InfoRow(if (ar) "طريقة المعالجة" else "Processing", "GPU motion-vector warp + blend")
+                            InfoRow(if (ar) "متجه الحركة" else "Motion vector", "104 / 256 texture width")
+                            InfoRow(if (ar) "نطاق الحركة" else "Motion compensation", if (ar) "متجه معروف للمشهد الاصطناعي فقط" else "Known vector for synthetic demo only")
+                        }
                     }
                 }
-                item { Text("FRAMEFORGE AI • v0.3.0 • Android", color = Muted, fontSize = 10.sp) }
+                item { Text("FRAMEFORGE AI • v0.5.0 • Android", color = Muted, fontSize = 10.sp) }
             }
         }
     }
