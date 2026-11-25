@@ -1,25 +1,33 @@
-# FRAMEFORGE AI — Android v0.5.0
+# FRAMEFORGE AI — Android v0.6.0
 
-FRAMEFORGE AI is an Android gaming diagnostics and graphics research application. It does not claim to modify or inject frames into third-party games.
+Gaming diagnostics and an experimental, app-owned image interpolation laboratory.
 
 ## Current capabilities
-- Device report: Android version, model, available CPU cores, memory availability, display refresh rate and Android thermal status (where supported).
-- OpenGL ES 2.0 GPU scene benchmark with vendor, renderer and GL version reporting. The reported FPS belongs to the app-owned benchmark scene only.
-- Touch interval counter (not a hardware touch-latency measurement).
-- Local game preference profiles (FPS preference, aspect ratio and Black Sky preference); these do not force changes in external games.
-- GPU interpolation lab with two synthetic source images. The demo applies a known translation vector to warp source samples before blending at a user-selected phase. This is a controlled-scene motion-compensated blend, not general optical flow, trained AI, or system-wide frame generation.
+- Device report: Android version, model, memory snapshot, refresh rate and thermal status where exposed by Android.
+- OpenGL ES renderer/vendor/version detection from the app's GL context.
+- A 10-second GPU scene benchmark. Results describe this app's test scene, not a third-party game's FPS.
+- Tap interval counter (not a measurement of hardware touch latency).
+- Synthetic GPU motion-vector warp/blend demonstration.
+- User-selected image pair interpolation using coarse CPU block matching. The estimator searches a small displacement window for each 8x8 block and warps two images toward an intermediate phase.
+- Local game preference profiles; these do not modify external games.
+- Arabic and English UI.
+
+## Important limitations
+- The image lab is a classical block-matching prototype, not a neural AI model and not dense optical flow.
+- It processes two user-selected still images. It does not capture or inject frames into PUBG Mobile, Free Fire, Call of Duty Mobile, or other external games.
+- The benchmark measures an app-owned OpenGL ES scene. It is not a game benchmark and does not guarantee higher game FPS.
+- Resolution/aspect settings and Black Sky are app-side preferences/previews, not system-wide or external-game modifications.
+- Android thermal and GPU telemetry availability varies by device/vendor.
 
 ## Build
-Requires JDK 17 and Android SDK platform 35.
+Open the project in Android Studio with JDK 17 and Android SDK 35, or run:
 
 ```bash
-gradle assembleDebug
+./gradlew assembleDebug
+./gradlew test
 ```
 
-APK output: `app/build/outputs/apk/debug/app-debug.apk`.
-
-## Device limitations
-Android apps generally cannot access another game's internal rendered frames or replace its presentation pipeline. Any system-wide or third-party-game frame generation requires supported OS/vendor integration and permissions. Results vary by GPU and thermal state.
+The repository's GitHub Actions workflow builds a debug APK and runs unit tests. A successful workflow is required before treating the APK as verified.
 
 ## Test device
-Initial target: TECNO Spark Go 2024 / Android 13 / Unisoc T606 / Mali-G57. Always validate on the actual device; emulator or CI success is not a substitute.
+Initial target: TECNO Spark Go 2024, Android 13, Unisoc T606, Mali-G57. Compatibility on other devices must be validated individually.

@@ -337,7 +337,7 @@ fun FrameForgeApp(context: Context) {
                             Column(Modifier.fillMaxWidth().background(
                                 androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF173B58), Color(0xFF172238), Panel)),
                                 RoundedCornerShape(22.dp)).padding(18.dp)) {
-                                Text(if (ar) "إصدار التطوير 0.5.0" else "DEVELOPER BUILD 0.5.0", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(if (ar) "إصدار التطوير 0.6.0" else "DEVELOPER BUILD 0.6.0", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(8.dp))
                                 Text(if (ar) "أدوات أداء حقيقية وقياسات شفافة" else "Real diagnostics. Transparent measurements.", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(8.dp))
@@ -490,9 +490,11 @@ fun FrameForgeApp(context: Context) {
                             InfoRow(if (ar) "متجه الحركة" else "Motion vector", "104 / 256 texture width")
                             InfoRow(if (ar) "نطاق الحركة" else "Motion compensation", if (ar) "متجه معروف للمشهد الاصطناعي فقط" else "Known vector for synthetic demo only")
                         }
+                        item { Divider(color = Color(0xFF27364A)) }
+                        item { OpticalFlowLab(arabic = ar) }
                     }
                 }
-                item { Text("FRAMEFORGE AI • v0.5.0 • Android", color = Muted, fontSize = 10.sp) }
+                item { Text("FRAMEFORGE AI • v0.6.0 • Android", color = Muted, fontSize = 10.sp) }
             }
         }
     }
